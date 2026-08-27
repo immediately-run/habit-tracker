@@ -151,6 +151,9 @@ export function useHabits(): HabitsApi {
         const store = await openPrivateStore('data');
         const cfg = await loadConfig(store.root);
         let data = await loadAll(store.root);
+        // Bail BEFORE seeding: a superseded run (StrictMode re-mount, fast
+        // unmount) must not race the live one into writing the samples twice.
+        if (cancelled) return;
         if (data.habits.length === 0 && !cfg.seeded) {
           data = buildSampleData();
           await Promise.all(

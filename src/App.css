@@ -190,7 +190,10 @@ code.path { display: block; padding: 8px 10px; word-break: break-all; }
 .wg-day.future { opacity: .4; }
 .wg-name { padding: 0 6px; min-width: 0; display: flex; align-items: center; gap: 4px; }
 .wg-name .dot { flex: none; margin-right: 2px; }
-.wg-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wg-name-text {
+  overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  font-size: 13px; line-height: 1.2; word-break: break-word;
+}
 .wg-count { flex: none; font: 400 11px/1 var(--mono); color: var(--ink-3); margin-left: 4px; }
 .wg-cell { display: flex; justify-content: center; }
 @media (max-width: 420px) {

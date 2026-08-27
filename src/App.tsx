@@ -31,7 +31,8 @@ function App() {
   const active = api.habits.filter((h) => !h.archived);
   const archived = api.config.showArchived ? api.habits.filter((h) => h.archived) : [];
   const openHabit = openId ? api.habits.find((h) => h.id === openId) ?? null : null;
-  const groupName = api.config.groupName ?? api.group.store?.name ?? null;
+  // Badge/heading fall back to a generic label when the host gave the space no name.
+  const groupName = api.config.groupSpaceId ? api.config.groupName ?? api.group.store?.name ?? 'Group' : null;
 
   const goTab = (t: TabId) => {
     setOpenId(null);
