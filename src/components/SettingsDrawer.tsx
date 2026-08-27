@@ -13,6 +13,11 @@ function SettingsDrawer({ api, onClose, onGoToGroup }: SettingsDrawerProps) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetting, setResetting] = useState(false);
   const groupName = api.config.groupName ?? api.group.store?.name ?? null;
+  const [name, setName] = useState(api.config.displayName ?? '');
+  const saveName = () => {
+    const next = name.trim() || undefined;
+    if (next !== api.config.displayName) void api.setConfig({ displayName: next });
+  };
 
   return (
     <Modal title="Settings" onClose={onClose} variant="sheet">
@@ -44,6 +49,32 @@ function SettingsDrawer({ api, onClose, onGoToGroup }: SettingsDrawerProps) {
               </button>
             </>
           )}
+        </section>
+
+        <section className="settings-section">
+          <h3>Your name</h3>
+          <p className="muted small">
+            How the group sees you (letters, digits, <code>-</code> and <code>_</code>). Shown as <b>{api.login}</b>.
+          </p>
+          <form
+            className="row wrap"
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveName();
+            }}
+          >
+            <input
+              className="input"
+              placeholder="Your name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={saveName}
+              aria-label="Your name"
+            />
+            <button type="submit" className="btn btn-ghost small">
+              Save
+            </button>
+          </form>
         </section>
 
         <section className="settings-section">

@@ -27,6 +27,8 @@ export type Checkins = Record<string, ReadonlySet<Ymd>>;
 
 export interface AppConfig {
   seeded?: boolean;
+  /** Group member name when the host gives the app no login (stage apps get `user: null`). */
+  displayName?: string;
   groupSpaceId?: string;
   groupName?: string;
   showArchived?: boolean;

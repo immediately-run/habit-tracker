@@ -74,13 +74,57 @@ export async function openRememberedSpace(spaceId: string, sub = ''): Promise<St
 
 // ── small fs helpers ───────────────────────────────────────────────────────────
 
+/** mkdir -p that survives concurrent callers: on the host fs two writers racing
+ *  the same recursive mkdir (e.g. seeding three habits in a Promise.all) make the
+ *  loser throw EEXIST even though the directory is now there. */
 export async function ensureDir(path: string): Promise<void> {
-  await fs.promises.mkdir(path, { recursive: true });
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await fs.promises.mkdir(path, { recursive: true });
+      return;
+    } catch (e) {
+      try {
+        if ((await fs.promises.stat(path)).isDirectory()) return;
+      } catch {
+        /* not there (yet) — fall through */
+      }
+      if ((e as { code?: string })?.code !== 'EEXIST' || attempt >= 2) throw e;
+    }
+  }
+}
+
+/**
+ * Parse `raw` as JSON, recovering from a stale tail. Host mounts (settings and
+ * space ports alike, observed 2026-08-27) do NOT truncate on overwrite: writing
+ * shorter content leaves the old file's trailing bytes behind, so a rewritten
+ * file reads back as `<new JSON>}` and a strict parse throws. The valid document
+ * is always a prefix, so walk back over candidate closers until one parses.
+ */
+export function parseJsonPrefix<T>(raw: string): T | undefined {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    /* fall through to prefix recovery */
+  }
+  let end = raw.length;
+  for (let i = 0; i < 16; i++) {
+    end = Math.max(raw.lastIndexOf('}', end - 1), raw.lastIndexOf(']', end - 1));
+    if (end < 0) return undefined;
+    try {
+      const v = JSON.parse(raw.slice(0, end + 1)) as T;
+      console.warn('[habit-tracker] recovered JSON with a stale tail (host writeFile did not truncate)');
+      return v;
+    } catch {
+      /* keep walking back */
+    }
+  }
+  return undefined;
 }
 
 export async function readJson<T>(path: string, fallback: T): Promise<T> {
   try {
-    return JSON.parse(await fs.promises.readFile(path, 'utf8')) as T;
+    const v = parseJsonPrefix<T>(await fs.promises.readFile(path, 'utf8'));
+    return v === undefined ? fallback : v;
   } catch {
     return fallback;
   }
@@ -89,7 +133,16 @@ export async function readJson<T>(path: string, fallback: T): Promise<T> {
 export async function writeJson(path: string, value: unknown): Promise<void> {
   const dir = path.slice(0, path.lastIndexOf('/'));
   if (dir) await ensureDir(dir);
-  await fs.promises.writeFile(path, JSON.stringify(value, null, 2), 'utf8');
+  let text = JSON.stringify(value, null, 2);
+  // Never shrink a file: pad with newlines up to the current size so the host's
+  // non-truncating overwrite (see parseJsonPrefix) can't leave a stale tail.
+  try {
+    const { size } = await fs.promises.stat(path);
+    if (size > text.length) text = text.padEnd(size, '\n');
+  } catch {
+    /* new file */
+  }
+  await fs.promises.writeFile(path, text, 'utf8');
 }
 
 export async function readText(path: string): Promise<string | null> {

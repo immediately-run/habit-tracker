@@ -88,7 +88,6 @@ interface OpenedGroup {
 
 export function useHabits(): HabitsApi {
   const auth = useAuth();
-  const login = safeLogin(auth.status === 'signed-in' ? auth.user?.login : undefined);
 
   const [status, setStatus] = useState<BootStatus>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +95,18 @@ export function useHabits(): HabitsApi {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [checkins, setCheckins] = useState<Checkins>({});
   const [config, setConfigState] = useState<AppConfig>({});
-  const [opened, setOpened] = useState<OpenedGroup | null>(null);
+  // The host hands stage apps `user: null` (identity is elevated), so a member
+  // name from settings is the fallback — otherwise every member is "someone"
+  // and they all write into the same folder.
+  const login = safeLogin((auth.status === 'signed-in' && auth.user?.login) || config.displayName);
+  const [opened, setOpenedState] = useState<OpenedGroup | null>(null);
+  // Mirrored in a ref so the "open the remembered space" effect can tell that
+  // joinGroup already opened this id (with the mount the host just handed us).
+  const openedRef = useRef<OpenedGroup | null>(null);
+  const setOpened = useCallback((o: OpenedGroup | null) => {
+    openedRef.current = o;
+    setOpenedState(o);
+  }, []);
   const [members, setMembers] = useState<MemberStatus[]>([]);
   const [joinBusy, setJoinBusy] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -278,8 +288,34 @@ export function useHabits(): HabitsApi {
   }, [privateStore, enqueue, commitHabits, commitCheckins]);
 
   // ── group: open the remembered space at boot / when the id changes ────────────
+  /** Login the open group store was last fully mirrored for (a rename re-mirrors). */
+  const mirroredLogin = useRef<string | null>(null);
+
+  /** Mirror my data into a (just opened) group store and describe the result. */
+  const activateGroup = useCallback(
+    async (forId: string, store: Store): Promise<OpenedGroup> => {
+      let err: string | null = store.mode === 'ro' ? 'You only have read access to this space, so your own check-ins are not shared.' : null;
+      if (store.mode === 'rw') {
+        try {
+          mirroredLogin.current = login;
+          await mirrorAll(store.root, login, latest.current.habits, latest.current.checkins);
+        } catch (e) {
+          err = `Could not write to the group space: ${errMsg(e)}`;
+        }
+      }
+      return { forId, store, error: err };
+    },
+    [login],
+  );
+
   useEffect(() => {
     if (status !== 'ready' || !groupSpaceId) return;
+    // Just joined in this session: joinGroup already opened it with the mount the
+    // host returned — re-mounting by id is not only redundant, it FAILS for a
+    // space this app created (createSpace grants no durable mount; only a
+    // powerbox pick does), which would turn a successful create into
+    // "no longer available".
+    if (openedRef.current?.forId === groupSpaceId) return;
     let cancelled = false;
     (async () => {
       const store = await openRememberedSpace(groupSpaceId, '');
@@ -288,20 +324,13 @@ export function useHabits(): HabitsApi {
         setOpened({ forId: groupSpaceId, store: null, error: 'The group space is no longer available. Leave the group or pick it again.' });
         return;
       }
-      let err: string | null = store.mode === 'ro' ? 'You only have read access to this space, so your own check-ins are not shared.' : null;
-      if (store.mode === 'rw') {
-        try {
-          await mirrorAll(store.root, login, latest.current.habits, latest.current.checkins);
-        } catch (e) {
-          err = `Could not write to the group space: ${errMsg(e)}`;
-        }
-      }
-      if (!cancelled) setOpened({ forId: groupSpaceId, store, error: err });
+      const o = await activateGroup(groupSpaceId, store);
+      if (!cancelled) setOpened(o);
     })();
     return () => {
       cancelled = true;
     };
-  }, [status, groupSpaceId, login]);
+  }, [status, groupSpaceId, activateGroup, setOpened]);
 
   // ── group: poll the status folder (no remote watch events on shared spaces) ───
   const refreshGroup = useCallback(async () => {
@@ -324,6 +353,13 @@ export function useHabits(): HabitsApi {
     };
   }, [groupStore, refreshGroup]);
 
+  // ── group: a renamed member gets a full mirror under the new folder ───────────
+  useEffect(() => {
+    if (!groupStore || groupStore.mode !== 'rw' || mirroredLogin.current === login) return;
+    mirroredLogin.current = login;
+    void enqueue('mirror', () => mirrorAll(groupStore.root, login, latest.current.habits, latest.current.checkins));
+  }, [groupStore, login, enqueue]);
+
   // ── group: publish my summary whenever my data changes (debounced) ────────────
   useEffect(() => {
     if (!groupStore || groupStore.mode !== 'rw' || status !== 'ready') return;
@@ -341,6 +377,7 @@ export function useHabits(): HabitsApi {
         const store =
           how === 'create' ? await createSharedStore(name?.trim() || 'Accountability group') : await pickSharedStore();
         if (!store.spaceId) throw new Error('The picked folder is not a space.');
+        setOpened(await activateGroup(store.spaceId, store));
         await setConfig({ groupSpaceId: store.spaceId, groupName: store.name ?? name?.trim() });
       } catch (e) {
         const msg = errMsg(e);
@@ -349,14 +386,15 @@ export function useHabits(): HabitsApi {
         setJoinBusy(false);
       }
     },
-    [setConfig],
+    [setConfig, activateGroup, setOpened],
   );
 
   const leaveGroup = useCallback(async () => {
     setJoinError(null);
     setMembers([]);
+    setOpened(null);
     await setConfig({ groupSpaceId: undefined, groupName: undefined });
-  }, [setConfig]);
+  }, [setConfig, setOpened]);
 
   const dismissError = useCallback(() => setError(null), []);
 

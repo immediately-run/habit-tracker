@@ -1,3 +1,6 @@
 node_modules
 dist
 devfs-playground
+
+# host-verification screenshots (Chrome MCP can only write inside the workspace)
+.shots/
