@@ -1,135 +1,85 @@
-# immediately.run — starter template
+# Habit tracker
 
-A ready-to-run starter for building apps on
-[immediately.run](https://immediately.run): React + TypeScript + Vite, wired to
-the brand design system, with the project layout immediately.run expects.
+Daily habits, streaks and a year heatmap — stored in your own files.
 
-## Try it instantly
+An [immediately.run](https://immediately.run) example app: React + TypeScript that
+loads straight from this repo and runs in your browser, with no server of its own.
+Everything you track is plain JSON in a folder that belongs to you.
 
-Try this template on [immediately.run](https://immediately.run/present/github/immediately-run/new-project-template/main/files/src/App.tsx)
+**Try it:** <https://immediately.run/present/github/immediately-run/habit-tracker/main/files/src/App.tsx>
 
-> Using this as a starting point for your own app? After you push to your repo,
-> update the link above to
-> `https://immediately.run/present/github/<owner>/<repo>/<ref>/files/src/App.tsx`.
+## What it does
 
-## Use this template
+- **Today** — every active habit with a big tap-to-check ring, its current streak,
+  best streak, completion rate over the last 30 days and progress against its
+  weekly target.
+- **Habit detail** — a GitHub-style 52-week heatmap (tap a day to toggle it),
+  streak stats, edit (name, color, target days per week), archive/restore, delete.
+- **Week** — a 7-column grid of habits × days; tap any past day to toggle it.
+  Future days are locked. Step back through earlier weeks.
+- **Group** — an optional accountability group backed by a shared space: everyone
+  in it sees each other's habits, today's status and streaks.
+- **Settings** — a bottom sheet with the group controls, a "show archived" toggle,
+  where your data lives, and "Reset sample data".
 
-1. Create a new repo from this template (or copy the files).
-2. `npm install`
-3. `npm run dev` and start editing `src/App.tsx`.
-4. Push to GitHub and open it on immediately.run with the link above.
+On first run the app seeds three sample habits with about three weeks of random
+history so the heatmap and streaks aren't empty. Delete them, edit them, or reset
+them from Settings.
 
-## Fast loading on immediately.run (auto-cache)
+## How data is stored
 
-immediately.run normally reads your sources from the GitHub API, which is slow
-and rate-limited for anonymous visitors. This template ships a GitHub Action
-([`.github/workflows/cache.yml`](./.github/workflows/cache.yml)) that, on every
-push to `main`, builds a pre-cached zip of your repo and publishes it to your
-repo's **own GitHub Pages**. immediately.run finds it automatically at
-`https://<owner>.github.io/<repo>/cached_repositories/main.zip` and loads from
-there — falling back to the API if it's missing.
-
-The cache also embeds a manifest sidecar, so visitors can push edits back to
-GitHub even when the app was loaded from the zip.
-
-### Enable the cache (one-time)
-
-For a repo in your **own** GitHub account or org, there's a single one-time step:
-
-1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
-2. Push to `main` (or re-run the **Cache for immediately.run** workflow from the
-   Actions tab).
-
-That's it — no tokens and no secrets to configure. The workflow builds the zip and
-publishes it to your repo's Pages; immediately.run finds it automatically on the
-next load. The first publish can lag a push by up to ~10 minutes of GitHub Pages
-CDN caching. If the app still loads from the API, check that the workflow run
-succeeded and that Pages shows a green **github-pages** deployment.
-
-> **immediately-run org repos** skip even that step: the org's internal **deploy
-> GitHub App** self-provisions Pages on the first run (it holds Pages +
-> Administration write and its `DEPLOY_APP_ID` / `DEPLOY_APP_PRIVATE_KEY` are org
-> secrets). That App is org-internal — repos outside the org neither have nor need
-> it, and `cache.yml` automatically falls back to the manual step above.
-
-### Always run the newest commit
-
-By default the cached version is served even if it's a few minutes behind
-`main`. If your app must always reflect the very latest commit, add this to
-`package.json`:
-
-```jsonc
-{
-  "immediately.run": {
-    "requireLatest": true
-  }
-}
-```
-
-immediately.run still boots instantly from the cache, then checks in the
-background (one API request) whether the cache is current and, if not, reloads
-from GitHub.
-
-## How it's organized
-
-immediately.run renders the **default export of `src/App.tsx`** — that's the
-entry point, not `main.tsx`.
+Private data lives in the app's per-user settings folder (the host gives the app
+its own private mount; nothing is shared unless you opt in):
 
 ```
-src/
-  main.tsx              # local vite dev/build entry only — immediately.run IGNORES this
-  App.tsx               # ROOT: default export + imports the global CSS
-  index.css             # fonts, design tokens (dark + light), resets
-  App.css               # layout + component styles
-  mdx.d.ts              # type shim so `import X from './x.mdx'` works
-  components/           # one default-exported React component per file
-  data/                 # typed data arrays (NO components/JSX here)
-  hooks/                # custom hooks (NO components here)
-  assets/               # images you import, e.g. import logo from './assets/logo.png'
+<private>/config.json                          seeded flag, group space id, display prefs
+<private>/habits/<habitId>.json                { id, name, color, targetPerWeek, archived, created }
+<private>/checkins/<habitId>/<YYYY-MM>.json    { "days": [1, 3, 5, …] }  — one month per file
 ```
 
-The included page shows the core patterns: a data array mapped to cards
-(`data/features.ts` → `components/Features.tsx`), a custom hook
-(`hooks/useTheme.ts` → `components/ThemeSwitch.tsx`), and local React state
-(`components/Counter.tsx`).
+A check-in write touches exactly one small month file, so writes stay tiny and
+the data is trivially readable (and editable) with any text editor.
 
-## Filesystem access (`fs`)
+## Accountability group (multi-user)
 
-immediately.run apps can read and write a filesystem by importing `fs` (async
-only — `fs.promises.*` and callback style). This template has local-dev support
-for it built in via [`@immediately-run/dev-fs`](https://github.com/immediately-run/dev-fs),
-a Vite plugin (already wired into `vite.config.ts`) that bridges the same
-filesystem to your real local disk during `vite dev`. See that repo for the
-supported API and details.
+Open the **Group** tab and either pick an existing shared space or create a new
+one. The app remembers the space and re-opens it on the next launch without a
+prompt. Inside the space each member only ever writes under their own folder, so
+concurrent members never overwrite each other:
 
-```ts
-import fs from 'fs'
-
-await fs.promises.writeFile('/data/notes.txt', 'hello', 'utf8')
-const text = await fs.promises.readFile('/data/notes.txt', 'utf8')
+```
+<shared>/members/<login>/habits/<habitId>.json
+<shared>/members/<login>/checkins/<habitId>/<YYYY-MM>.json
+<shared>/status/<login>.json                   today summary + streaks (what the Group tab reads)
 ```
 
-`main.tsx` runs a one-off round-trip smoke test in dev — check the browser
-console for the `[dev-fs]` group, and delete it freely.
+Other members' changes are picked up by polling the `status/` folder every three
+seconds (shared spaces emit no remote change events). Inviting people to the space
+happens in the platform's Spaces UI — the app itself cannot add members. Leaving
+the group only forgets the space in this app; your files in it stay put.
 
-## The rules that keep it working on immediately.run
-
-See [`CLAUDE.md`](./CLAUDE.md) for the full list. The essentials:
-
-- **Global CSS is imported from `App.tsx`, never only from `main.tsx`.**
-- **A file that exports a component exports *only* components** — data, consts,
-  and helpers go in `data/`, `hooks/`, or `lib/`. `npm run lint` enforces this.
-- **Pull colors, fonts, radii, and shadows from the tokens in `index.css`**
-  rather than hard-coding values.
-
-## Develop
-
-Requires Node.js 20.19+ or 22.12+.
+## Local development
 
 ```bash
 npm install
-npm run dev      # local dev server
-npm run build    # tsc -b && vite build — must pass with no type errors
-npm run lint     # eslint — enforces the React Fast Refresh / HMR rule
-npm run preview  # serve the production build
+npm run dev      # http://localhost:5173 — persists to ./devfs-playground/ (git-ignored)
+npm run build    # type-check + production build
+npm run lint     # includes the React Fast Refresh rule immediately.run relies on
 ```
+
+Under `vite dev` there is no host, so the "private" and "shared" stores are both
+folders under `devfs-playground/` and the group member is called `someone`.
+To exercise the real host (consent prompts, spaces, sign-in) mount the working
+tree with the CLI: `immediately.run dev . --origin https://local.immediately.run`.
+
+## SDK features used
+
+- `@immediately-run/sdk/mounts` — `openSettings` (private store), `requestMount`
+  (pick a shared space), `createSpace`, `mount('space:<id>')` (re-open a
+  remembered space).
+- `@immediately-run/sdk/auth` — `useAuth` for the member login.
+- `fs` (async ZenFS surface) — all reads and writes, plus directory polling.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

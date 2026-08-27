@@ -1,6 +1,15 @@
-# Working in this repo
+# Working in this repo — Habit tracker
 
-This is an **immediately.run app**: React + TypeScript that loads from GitHub and
+Habit tracker is an immediately.run example app: daily habits with a tap-to-check
+Today view, a 52-week SVG heatmap per habit, a week grid, and an optional
+accountability group backed by a shared space. Layout: `src/lib/` (dates, habit
+model + file layout, stats, seed data, group layout, the reference `store.ts`),
+`src/hooks/useHabits.ts` (the single state hook: boot, CRUD, toggles, group
+mirroring + polling), `src/components/` (one component per file), `src/data/palette.ts`.
+Data layout and multi-user rules are in `README.md`; keep "one member = own folder"
+and "one habit-month = one file" when changing persistence.
+
+It is an **immediately.run app**: React + TypeScript that loads from GitHub and
 transpiles in the browser (no server, no build step at runtime). Keep the rules
 below or the app breaks *only* on immediately.run while still looking fine in
 local `vite dev` — the most common silent failure.
