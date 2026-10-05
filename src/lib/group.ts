@@ -5,9 +5,9 @@
 //   <shared>/status/<login>.json                            today summary (what the Group tab shows)
 //
 // Every member writes ONLY under paths containing their own login, so concurrent
-// members never rewrite each other's files. The Group tab polls `status/` (one
+// members never rewrite each other's files. The Group tab watches `status/` (one
 // flat directory) — nested changes don't bump a parent's mtime, so the summary
-// file is what makes polling cheap and reliable.
+// file is what makes watching cheap and reliable.
 import { listFiles, readJson, writeJson } from './store';
 import { saveAllMonths, saveHabit, type Checkins, type Habit } from './habits';
 import { computeStats } from './stats';

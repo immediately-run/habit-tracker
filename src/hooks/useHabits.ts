@@ -9,7 +9,7 @@ import {
   openPrivateStore,
   openRememberedSpace,
   pickSharedStore,
-  pollDir,
+  watchDir,
   type Store,
 } from '../lib/store';
 import {
@@ -332,7 +332,7 @@ export function useHabits(): HabitsApi {
     };
   }, [status, groupSpaceId, activateGroup, setOpened]);
 
-  // ── group: poll the status folder (no remote watch events on shared spaces) ───
+  // ── group: watch the status folder (R3-901 — the relay covers remote writes) ───
   const refreshGroup = useCallback(async () => {
     if (!groupStore) return;
     try {
@@ -346,7 +346,8 @@ export function useHabits(): HabitsApi {
     if (!groupStore) return;
     // First read is deferred a tick so the effect body itself never sets state.
     const first = setTimeout(() => void refreshGroup(), 0);
-    const stop = pollDir(statusDir(groupStore.root), () => void refreshGroup(), 3000);
+    // R3-901: the status dir is watched, not polled (the relay covers remote writes).
+    const stop = watchDir(statusDir(groupStore.root), () => void refreshGroup());
     return () => {
       clearTimeout(first);
       stop();
