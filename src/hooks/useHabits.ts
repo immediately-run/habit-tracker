@@ -332,7 +332,7 @@ export function useHabits(): HabitsApi {
     };
   }, [status, groupSpaceId, activateGroup, setOpened]);
 
-  // ── group: poll the status folder (no remote watch events on shared spaces) ───
+  // ── group: watch the status folder (R3-901 — the relay covers remote writes) ───
   const refreshGroup = useCallback(async () => {
     if (!groupStore) return;
     try {
